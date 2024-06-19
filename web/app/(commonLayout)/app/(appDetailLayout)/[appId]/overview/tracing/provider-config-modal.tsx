@@ -70,7 +70,6 @@ const ProviderConfigModal: FC<Props> = ({
   }] = useBoolean(false)
 
   const handleRemove = useCallback(async () => {
-    hideRemoveConfirm()
     await removeTracingConfig({
       appId,
       provider: type,
@@ -80,6 +79,7 @@ const ProviderConfigModal: FC<Props> = ({
       message: t('common.api.remove'),
     })
     onRemoved()
+    hideRemoveConfirm()
   }, [hideRemoveConfirm, appId, type, t, onRemoved])
 
   const handleConfigChange = useCallback((key: string) => {
@@ -136,7 +136,7 @@ const ProviderConfigModal: FC<Props> = ({
         message: t('common.api.success'),
       })
       onSaved(config)
-      if (!isAdd)
+      if (isAdd)
         onChosen(type)
     }
     finally {
@@ -243,7 +243,7 @@ const ProviderConfigModal: FC<Props> = ({
                         </Button>
                         <Button
                           className='h-9 text-sm font-medium'
-                          type='primary'
+                          variant='primary'
                           onClick={handleSave}
                           loading={isSaving}
                         >

@@ -16,6 +16,7 @@ import {
 const I18N_PREFIX = 'app.tracing'
 
 type Props = {
+  readOnly: boolean
   className?: string
   hasConfigured: boolean
 } & PopupProps
@@ -31,6 +32,9 @@ const ConfigBtn: FC<Props> = ({
     setOpen(v => !v)
   }, [setOpen])
 
+  if (popupProps.readOnly && !hasConfigured)
+    return null
+
   const triggerContent = hasConfigured
     ? (
       <div className={cn(className, 'p-1 rounded-md hover:bg-black/5 cursor-pointer')}>
@@ -38,7 +42,7 @@ const ConfigBtn: FC<Props> = ({
       </div>
     )
     : (
-      <Button type='primary'
+      <Button variant='primary'
         className={cn(className, '!h-8 !px-3 select-none')}
       >
         <Settings04 className='mr-1 w-4 h-4' />
