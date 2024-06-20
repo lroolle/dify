@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 from enum import Enum
@@ -8,14 +9,17 @@ from langfuse import Langfuse
 from pydantic import BaseModel, Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
+from core.helper.encrypter import decrypt_token, encrypt_token, obfuscated_token
 from core.moderation.base import ModerationInputsResult
 from extensions.ext_database import db
 from models.dataset import Document
 from models.model import Message, MessageAgentThought, MessageFile
 from models.workflow import WorkflowNodeExecution, WorkflowRun
 from services.ops_trace.base_trace_instance import BaseTraceInstance
-from services.ops_trace.utils import filter_none_values
+from services.ops_trace.model import LangfuseConfig
+from services.ops_trace.utils import filter_none_values, replace_text_with_content
 
+logger = logging.getLogger(__name__)
 
 def validate_input_output(v, field_name):
     """
@@ -27,12 +31,24 @@ def validate_input_output(v, field_name):
     if v == {} or v is None:
         return v
     if isinstance(v, str):
-        return {field_name: v}
+        return [
+            {
+                "role": "assistant" if field_name == "output" else "user",
+                "content": v,
+            }
+        ]
     elif isinstance(v, list):
         if len(v) > 0 and isinstance(v[0], dict):
-            return {"message": v}
+            v = replace_text_with_content(data=v)
+            return v
         else:
-            return {field_name: v}
+            return [
+                {
+                    "role": "assistant" if field_name == "output" else "user",
+                    "content": str(v),
+                }
+            ]
+
     return v
 
 
@@ -186,6 +202,11 @@ class GenerationUsage(BaseModel):
     inputCost: Optional[float] = None
     outputCost: Optional[float] = None
     totalCost: Optional[float] = None
+
+    @field_validator("input", "output")
+    def ensure_dict(cls, v, info: ValidationInfo):
+        field_name = info.field_name
+        return validate_input_output(v, field_name)
 
 
 class LangfuseGeneration(BaseModel):
@@ -514,7 +535,7 @@ class LangFuseDataTrace(BaseTraceInstance):
         timer = kwargs.get("timer")
         start_time = timer.get("start")
         end_time = timer.get("end")
-        inputs = message_data.query
+        input = message_data.query
 
         metadata = {
             "message_id": message_id,
@@ -528,19 +549,28 @@ class LangFuseDataTrace(BaseTraceInstance):
             "from_source": message_data.from_source,
         }
 
-        span_data = LangfuseSpan(
+        generation_usage = GenerationUsage(
+            totalTokens=len(suggested_question),
+            input=len(input),
+            output=len(suggested_question),
+            total=len(suggested_question),
+            unit=UnitEnum.CHARACTERS,
+        )
+
+        generation_data = LangfuseGeneration(
             name="suggested_question",
-            input=inputs,
-            output=suggested_question,
+            input=input,
+            output=str(suggested_question),
             trace_id=message_id,
             start_time=start_time,
             end_time=end_time,
             metadata=metadata,
             level=LevelEnum.DEFAULT if message_data.status != 'error' else LevelEnum.ERROR,
             status_message=message_data.error if message_data.error else "",
+            usage=generation_usage,
         )
 
-        self.add_span(langfuse_span_data=span_data)
+        self.add_generation(langfuse_generation_data=generation_data)
 
     def dataset_retrieval_trace(self, message_id: str, documents: list[Document], **kwargs):
         message_data = kwargs.get("message_data")
@@ -665,7 +695,7 @@ class LangFuseDataTrace(BaseTraceInstance):
         )
         try:
             self.langfuse_client.trace(**format_trace_data)
-            print("LangFuse Trace created successfully")
+            logger.debug("LangFuse Trace created successfully")
         except Exception as e:
             raise f"LangFuse Failed to create trace: {str(e)}"
 
@@ -675,7 +705,7 @@ class LangFuseDataTrace(BaseTraceInstance):
         )
         try:
             self.langfuse_client.span(**format_span_data)
-            print("LangFuse Span created successfully")
+            logger.debug("LangFuse Span created successfully")
         except Exception as e:
             raise f"LangFuse Failed to create span: {str(e)}"
 
@@ -696,7 +726,7 @@ class LangFuseDataTrace(BaseTraceInstance):
         )
         try:
             self.langfuse_client.generation(**format_generation_data)
-            print("LangFuse Generation created successfully")
+            logger.debug("LangFuse Generation created successfully")
         except Exception as e:
             raise f"LangFuse Failed to create generation: {str(e)}"
 
@@ -710,3 +740,28 @@ class LangFuseDataTrace(BaseTraceInstance):
         )
 
         generation.end(**format_generation_data)
+
+    def api_check(self):
+        try:
+            return self.langfuse_client.auth_check()
+        except Exception as e:
+            logger.debug(f"LangFuse API check failed: {str(e)}")
+            return False
+
+    @classmethod
+    def obfuscate_config(cls, config: LangfuseConfig):
+        public_key = obfuscated_token(config.public_key)
+        secret_key = obfuscated_token(config.secret_key)
+        return LangfuseConfig(public_key=public_key, secret_key=secret_key, host=config.host)
+
+    @classmethod
+    def encrypt_config(cls, tenant_id, config: LangfuseConfig):
+        decrypt_public_key = encrypt_token(tenant_id, config.public_key)
+        decrypt_secret_key = encrypt_token(tenant_id, config.secret_key)
+        return LangfuseConfig(public_key=decrypt_public_key, secret_key=decrypt_secret_key, host=config.host)
+
+    @classmethod
+    def decrypt_config(cls, tenant_id, config: LangfuseConfig):
+        decrypt_public_key = decrypt_token(tenant_id, config.public_key)
+        decrypt_secret_key = decrypt_token(tenant_id, config.secret_key)
+        return LangfuseConfig(public_key=decrypt_public_key, secret_key=decrypt_secret_key, host=config.host)

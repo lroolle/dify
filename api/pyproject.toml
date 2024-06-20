@@ -26,6 +26,7 @@ select = [
     "E117", # over-indented
     "RUF019", # unnecessary-key-check
     "RUF100", # unused-noqa
+    "RUF101", # redirected-noqa
     "S506", # unsafe-yaml-load
     "W191", # tab-indentation
     "W605", # invalid-escape-sequence
@@ -40,7 +41,6 @@ ignore = [
     "B005", # strip-with-multi-characters
     "B006", # mutable-argument-default
     "B007", # unused-loop-control-variable
-    "B024", # abstract-base-class-without-abstract-method
     "B026", # star-arg-unpacking-after-keyword-arg
     "B901", # return-in-generator
     "B904", # raise-without-from-inside-except
