@@ -17,7 +17,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: ${{ env.DOCKERHUB_TOKEN }}
     strategy:
       matrix:
         include:
@@ -28,6 +27,13 @@ jobs:
             image_name_env: "DIFY_API_IMAGE_NAME"
             context: "api"
     steps:
+      - name: Check if DOCKERHUB_TOKEN is set
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "DOCKERHUB_TOKEN is not set. Skipping the workflow."
+            exit 1
+          fi
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
