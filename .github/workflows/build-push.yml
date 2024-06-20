@@ -1,4 +1,4 @@
-name: Build and Push API & Web
+name: Build and Push Docker Images
 
 on:
   push:
@@ -21,7 +21,7 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.platform == 'linux/arm64' && 'arm64_runner' || 'ubuntu-latest' }}
-    if: github.repository == 'langgenius/dify'
+    if: ${{ env.DOCKERHUB_TOKEN }}
     strategy:
       matrix:
         include:

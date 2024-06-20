@@ -2,7 +2,7 @@ name: Deploy Dev
 
 on:
   workflow_run:
-    workflows: ["Build and Push API & Web"]
+    workflows: ["Build and Push Docker Images"]
     branches:
       - "deploy/dev"
     types:
