@@ -8,6 +8,7 @@ from flask_restful import Resource
 
 from constants.languages import languages
 from extensions.ext_database import db
+from extensions.ext_redis import redis_client
 from libs.oauth import GitHubOAuth, GoogleOAuth, OAuthUserInfo
 from models.account import Account, AccountStatus
 from services.account_service import AccountService, RegisterService, TenantService
@@ -81,6 +82,9 @@ class OAuthCallback(Resource):
         AccountService.update_last_login(account, request)
 
         token = AccountService.get_account_jwt_token(account)
+
+        # put account id into redis with 30 days tts.
+        redis_client.set(f"account:{account.id}", token, ex=30 * 24 * 60 * 60)
 
         return redirect(f'{current_app.config.get("CONSOLE_WEB_URL")}?console_token={token}')
 

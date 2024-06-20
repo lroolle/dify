@@ -1,8 +1,9 @@
 import os
 
 from configs.app_configs import DifyConfigs
+from extensions.ext_redis import redis_client
 
-if not os.environ.get("DEBUG") or os.environ.get("DEBUG").lower() != 'true':
+if not os.environ.get("DEBUG") or os.environ.get("DEBUG", "false").lower() != 'true':
     from gevent import monkey
 
     monkey.patch_all()
@@ -169,6 +170,9 @@ def load_user_from_request(request_from_flask_login):
 
         decoded = PassportService().verify(auth_token)
         user_id = decoded.get('user_id')
+        # check if account id in redis.
+        if not redis_client.get(f"account:{user_id}"):
+            return None
 
         return AccountService.load_user(user_id)
     else:
