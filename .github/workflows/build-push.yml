@@ -1,4 +1,4 @@
-name: Build and Push API & Web
+name: Build and Push Docker Images
 
 on:
   push:
@@ -17,30 +17,31 @@ env:
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   DIFY_WEB_IMAGE_NAME: ${{ vars.DIFY_WEB_IMAGE_NAME || 'langgenius/dify-web' }}
   DIFY_API_IMAGE_NAME: ${{ vars.DIFY_API_IMAGE_NAME || 'langgenius/dify-api' }}
+  BUILD_PLATFORMS: ${{ vars.BUILD_PLATFORMS || 'linux/amd64,linux/arm64' }}
 
 jobs:
   build:
     runs-on: ${{ matrix.platform == 'linux/arm64' && 'arm64_runner' || 'ubuntu-latest' }}
-    # if: github.repository == 'langgenius/dify'
     strategy:
       matrix:
+        platform: ${{ fromJson(format('[{0}]', env.BUILD_PLATFORMS)) }}
         include:
-          - service_name: "build-api-amd64"
+          - platform: linux/amd64
+            service_name: "build-api-amd64"
             image_name_env: "DIFY_API_IMAGE_NAME"
             context: "api"
-            platform: linux/amd64
-          - service_name: "build-api-arm64"
+          - platform: linux/arm64
+            service_name: "build-api-arm64"
             image_name_env: "DIFY_API_IMAGE_NAME"
             context: "api"
-            platform: linux/arm64
-          - service_name: "build-web-amd64"
+          - platform: linux/amd64
+            service_name: "build-web-amd64"
             image_name_env: "DIFY_WEB_IMAGE_NAME"
             context: "web"
-            platform: linux/amd64
-          - service_name: "build-web-arm64"
+          - platform: linux/arm64
+            service_name: "build-web-arm64"
             image_name_env: "DIFY_WEB_IMAGE_NAME"
             context: "web"
-            platform: linux/arm64
 
     steps:
       - name: Prepare
@@ -70,7 +71,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: "{{defaultContext}}:${{ matrix.context }}"
+          context: ${{ matrix.context }}
           platforms: ${{ matrix.platform }}
           build-args: COMMIT_SHA=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -95,7 +96,6 @@ jobs:
   create-manifest:
     needs: build
     runs-on: ubuntu-latest
-    # if: github.repository == 'langgenius/dify'
     strategy:
       matrix:
         include:
